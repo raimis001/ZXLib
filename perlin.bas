@@ -11,10 +11,17 @@ END FUNCTION
 
 ' Returns 1 for noise, 0 for no noise
 'x and y are pixel coordinates, scale is the size of the noise "cells"'
-FUNCTION noise01(x as uByte, y as uByte, scale as uByte) as uByte
+' threshold is the value above which noise is considered present'
+FUNCTION noise01(x as uByte, y as uByte, scale as uByte, threshold AS UBYTE = 128) as uByte
     DIM sx as uByte = INT(x / scale)
     DIM sy as uByte = INT(y / scale)
-     RETURN (hashPerm(sx, sy) & 128) / 128
+    'RETURN (hashPerm(sx, sy) & 128) / 128
+
+    IF hashPerm(sx, sy) > threshold THEN
+        RETURN 1
+    END IF
+    RETURN 0
+
 END FUNCTION
 
 SUB initPerlin()
@@ -54,7 +61,7 @@ initPerlin()
 
 FOR y = 0 TO 196 STEP 4
     FOR x = 0 TO 255 STEP 4
-        IF noise01(x, y, 20) = 1 THEN
+        IF noise01(x, y, 20, 200) = 1 THEN
             PLOT x, y
         END IF
     NEXT x
