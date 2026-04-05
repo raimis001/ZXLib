@@ -18,64 +18,14 @@ CONST SCREEN_WIDTH  AS UBYTE = 32
 CONST SCREEN_WIDTH42 AS UBYTE = 42
 CONST SCREEN_HEIGHT  AS UBYTE = 24
 
+CONST LINE_EMPTY AS string = "                                         "
 
-function getFrames() as uLong
-    return PEEK(23672) + PEEK(23673) * 256 + (PEEK(23674) and 127) * 65536
-    'return INT(PEEK (23672))/50 + (256 * PEEK(23673) + 65536 * PEEK (23674))
-end function
-
-SUB resetFrames()
-    POKE UINTEGER 23672, 0
-    POKE UINTEGER 23673, 0
-    POKE UINTEGER 23674, 0
-END SUB
-
-
-function CalcYAddress(x AS UByte, y as UBYTE) as UInteger
-    DIM offset AS UInteger
-    DIM offsetY AS UInteger
-	IF y<8 THEN
-		offset=0
-		offsetY=(y SHL 5)
-		
-		GOTO calculate
-	END IF
-	
-	IF y<16 THEN
-		offset=2048
-		offsetY=((y-8) SHL 5)
-		
-		GOTO calculate
-	END IF
-	
-	offset=4096
-	offsetY=((y-16) SHL 5)
-	
-	calculate:
-	return 16384 + offset + offsetY + x
-END function
-
-SUB DrawCombinedChar(x AS UByte, y AS UByte, graphDataAddr AS UInteger)
-    ' Aprēķina ekrāna atmiņas adresi rakstzīmei (x, y)
-
-    DIM baseAddr AS UInteger = CalcYAddress(x,y)
-    DIM screenAddr AS UInteger
-
-    ' Apvieno grafiku 8 rindām (8x8 rakstzīme)
-    FOR row = 0 TO 7
-        screenAddr = baseAddr + row * 256
-        POKE UBYTE screenAddr, (PEEK (UBYTE, (graphDataAddr+row))) bOR (PEEK (UBYTE, screenAddr))
-    NEXT row
-END SUB
 
 SUB ClearEnter() 
     WHILE INKEY$ <> ""
         PAUSE 1
     END WHILE
 END SUB
-
-
-
 
 ' Prints a string at a specified position on the screen with optional formatting.
 ' Parameters:
@@ -110,6 +60,31 @@ SUB PrintAt(y as uByte, x as uByte, strAt$ as string, paperAt as Byte = -1, inkA
 
 END SUB
 
+SUB LoadTitleScreen()
+    ASM
+        LD HL, title_screen_data  
+        LD DE, 16384             
+        LD BC, 6912              
+        LDIR                     
+    END ASM
+END SUB
+
+SUB ClearTitleScreenData()
+    ASM
+        LD HL, title_screen_data
+        LD DE, title_screen_data + 1
+        LD BC, 6911
+        LD (HL), 0
+        LDIR
+    END ASM
+END SUB
+
+'Example of title screen data, to be included in the project that needs it.
+'ASM
+'    title_screen_data:
+'    INCBIN "zxTitleScr.scr"
+'END ASM
+
 SUB Wait(frameCount as uByte)
     FOR n=1 to frameCount
         ASM 
@@ -117,21 +92,3 @@ SUB Wait(frameCount as uByte)
         END ASM
     NEXT n
 END SUB
-
-
-'DIM att1 AS UByte = atr(x, y)
-'DIM p AS UByte = (att1 / 8) & 7
-'DIM f AS UByte = (att1 / 128) & 1 ' Izvelk FLASH (bits 7) no a
-'DIM b AS UByte = (att1 / 64) & 1 ' Izvelk BRIGHT (bits 6) no a
-'DIM k as UByte = att1 & 7
-
-'DIM n AS UByte = p * 8 + k
-
-
-'FUNCTION AndUByte(a AS UBYTE, b AS UBYTE) AS UBYTE
-''    ASM
-''        ld a, l      ; l = a (pirmais parametrs)
-''        and h        ; h = b (otrais parametrs)
-''        ld l, a      ; rezultāts atpakaļ L reģistrā (funkcijas atgrieztā vērtība)
-''    END ASM
-'END FUNCTION
