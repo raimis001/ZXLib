@@ -1,5 +1,12 @@
 #include "../helper.bas"
 #include "../hrprint.bas"
+#include "zx0.bas"
+
+CONST CHR_DOOR as ubyte = 144
+CONST CHR_KEY as ubyte = 145
+CONST CHR_SPIDERWEB as ubyte = 146
+CONST CHR_CHEST_CLOSED as ubyte = 147
+CONST CHR_CHEST_OPENED as ubyte = 148
 
 DIM ch_posY as ubyte = 2*8
 DIM ch_posX as ubyte = 2*8
@@ -21,6 +28,10 @@ DIM key as string
 
 DIM hasKey as BOOLEAN = FALSE
 
+DIM gold as ubyte = 0
+DIM energy as byte = 100
+DIM moveCount as ubyte = 0
+
 SUB Init()
     DIM x as ubyte
     DIM y as ubyte
@@ -29,8 +40,10 @@ SUB Init()
             field(x,y) = 0
         NEXT x
     NEXT y
-    PlaceItems(1, 1)
-    PlaceItems(2, 1)
+    PlaceItems(3, 10) 'Spiderwebs
+    PlaceItems(4, 5) 'Chests
+    PlaceItems(1, 1) 'Door
+    PlaceItems(2, 1) 'Key
 END SUB
 
 SUB PlaceItems(itemType as ubyte, itemCount as ubyte)
@@ -57,57 +70,56 @@ SUB OpenCell(x as ubyte, y as ubyte)
     if (field(x,y) >= 10) THEN RETURN
 
     field(x,y) = field(x,y) + 10 'mark as opened
+    if field(x,y) = 10 THEN print at y,x; paper WHITE; ink BLACK; " "
 
-    if field(x,y) = 10 THEN print at y,x; paper WHITE; ink BLACK; " ": RETURN
-
-    DrawItem(x,y)
-
-END SUB
-
-SUB ExecuteCell(x as ubyte, y as ubyte)
-
-    'if field(x,y) = 0 THEN RETURN
-
-    if field(x,y) = 11 THEN
-        if hasKey THEN
-            PrintAt(SCREEN_HEIGHT - 1 , 0, LINE_EMPTY)
-            PrintAt(SCREEN_HEIGHT - 1 , 0, "You opened the door! You win!")
-            'hasKey = FALSE
-        else
-            PrintAt(SCREEN_HEIGHT - 1 , 0, LINE_EMPTY)
-            PrintAt(SCREEN_HEIGHT - 1 , 0, "The door is locked. Find the key!")
-        END IF
-    END IF
-
-    if field(x,y) = 12 OR field(x,y) = 2 THEN
-        field(x,y) = 22 'mark as taken
-        hasKey = TRUE
-        PrintAt(SCREEN_HEIGHT - 1 , 0, LINE_EMPTY)
-        PrintAt(SCREEN_HEIGHT - 1 , 0, "You found the key! Now find the door!   ")
-        for xx = 0 to SCREEN_WIDTH - 1
-            for yy = 0 to SCREEN_HEIGHT - 1
-                if field(xx,yy) = 11 THEN DrawDoor(xx,yy)
-            next yy
-        next xx
-    END IF
-END SUB
-
-SUB DrawKey(x as ubyte, y as ubyte)
-
-    if hasKey THEN RETURN
-
-    print at y,x; paper WHITE; ink GREEN; CHR(144 + 1)
+    'DrawItem(x,y)
 
 END SUB
 
-SUB DrawDoor(x as ubyte, y as ubyte)
+
+FUNCTION DrawKey(x as ubyte, y as ubyte) as BOOLEAN
+    if field(x,y) <> 12 THEN RETURN FALSE
+    
+    if hasKey THEN RETURN TRUE
+
+    print at y,x; paper WHITE; ink GREEN; CHR(CHR_KEY)
+    RETURN TRUE
+
+END FUNCTION
+
+FUNCTION DrawDoor(x as ubyte, y as ubyte) as BOOLEAN
+    if field(x,y) <> 11 THEN RETURN FALSE
 
     dim c as ubyte = RED
     if hasKey THEN c = GREEN        
 
-    print at y,x; paper WHITE; ink c; CHR(144)
+    print at y,x; paper WHITE; ink c; CHR(CHR_DOOR)
 
-END SUB
+    RETURN TRUE
+
+END FUNCTION
+
+FUNCTION DrawSpiderweb(x as ubyte, y as ubyte) as BOOLEAN
+    if field(x,y) = 13 THEN
+        print at y,x; paper WHITE; ink CYAN; CHR(CHR_SPIDERWEB)
+        RETURN TRUE
+    END IF
+    RETURN FALSE
+END FUNCTION
+
+
+FUNCTION DrawChest(x as ubyte, y as ubyte) as BOOLEAN
+    if field(x,y) = 14 THEN
+        print at y,x; paper WHITE; ink GREEN; CHR(CHR_CHEST_CLOSED)
+        RETURN TRUE
+    END IF
+    if field(x,y) = 24 THEN
+        print at y,x; paper WHITE; ink BLACK; CHR(CHR_CHEST_OPENED)
+        RETURN TRUE
+    END IF
+    RETURN FALSE
+END FUNCTION
+
 
 SUB DrawField()
     DIM x as ubyte
@@ -119,11 +131,17 @@ SUB DrawField()
     NEXT y
 END SUB
 
+
 SUB DrawItem(x as ubyte, y as ubyte)
+    if (y < 1) THEN RETURN
+    if (y >= SCREEN_HEIGHT - 2) THEN RETURN
+    if (x < 0) THEN RETURN
+    if (x > SCREEN_WIDTH - 1) THEN RETURN
     if field(x,y) = 0 THEN RETURN
-    'if field(x,y) = 10 THEN print at y,x; paper WHITE; ink BLACK; " ": RETURN
-    if field(x,y) = 11 OR field(x,y) = 1 THEN DrawDoor(x,y): RETURN
-    if field(x,y) = 12 OR field(x,y) = 2 THEN DrawKey(x,y): RETURN
+    if DrawDoor(x,y) THEN RETURN
+    if DrawKey(x,y) THEN RETURN
+    if DrawSpiderweb(x,y) THEN RETURN
+    if DrawChest(x,y) THEN RETURN
 END SUB
 
 FUNCTION CheckKey(dir as string) as BOOLEAN
@@ -134,36 +152,116 @@ FUNCTION CheckKey(dir as string) as BOOLEAN
     RETURN FALSE
 END FUNCTION
 
+SUB ExecuteCell(x as ubyte, y as ubyte)
+
+    'if field(x,y) = 0 THEN RETURN
+
+    if field(x,y) = 13 THEN
+        energy = energy - 10
+        field(x,y) = 23 'mark as taken
+        DrawHint("You got caught in a spiderweb! Energy -10.")
+        return
+    END IF
+
+    if field(x,y) = 14 THEN
+        gold = gold + 10
+        energy = energy - 1
+        field(x,y) = 24 'mark as opened
+        DrawHint("You opened a chest and found 10 gold!")
+        return
+    END IF
+
+    'if field(x,y) = 24 THEN
+    ''    DrawHint("Chest is empty.")
+    ''    return
+    'END IF
+
+    if field(x,y) = 11 THEN
+        if hasKey THEN
+            DrawHint("You used the key to open the door!")
+        else
+            DrawHint("The door is locked. Find the key!")
+        END IF
+        return
+    END IF
+
+    if field(x,y) = 12 THEN
+        field(x,y) = 22 'mark as taken
+        hasKey = TRUE
+        DrawHint("You found the key! Now find the door!")
+        for xx = 0 to SCREEN_WIDTH - 1
+            for yy = 0 to SCREEN_HEIGHT - 1
+                if field(xx,yy) = 11 THEN DrawDoor(xx,yy)
+            next yy
+        next xx
+    END IF
+END SUB
+
+SUB DrawHint(hint as string)
+    PrintAt(SCREEN_HEIGHT - 1 , 0, LINE_EMPTY)
+    PrintAt(SCREEN_HEIGHT - 1 , 0, hint,0,-1, YELLOW)
+END SUB
+
+SUB DrawUI()
+    PrintAt(0, 0, "Gold: " + str(gold) + "  ", ALIGN_LEFT)
+    DIM e as string = str(energy)
+    while LEN(e) < 3
+        e = " " + e
+    END WHILE
+    PrintAt(0, SCREEN_WIDTH42 - 1, "  Energy: " + e + " ", ALIGN_RIGHT)
+END SUB
+
 '================== ==============='
 '== PROGRAM START                =='
 '================== ==============='
+
 paper BLACK: ink WHITE: border BLACK: cls
-LoadTitleScreen()
-ClearTitleScreenData()
-PAUSE 1000
+
+dzx0Standard(@title_screen_data, 16384)
+
+PAUSE 60
+ClearEnter() 
+PrintAt(20, 17, "1. START",ALIGN_LEFT, BLACK, PINK)
+PrintAt(21, 17, "2. EXIT",ALIGN_LEFT, BLACK, PINK)
+DO
+    key = INKEY$
+    if key = "2" THEN GOTO END_PROGRAMM
+LOOP UNTIL key = "1"
+
+randomize
+
+POKE UINTEGER 23675, @Items
 
 PROGRAM:
 
-    randomize
-    Wait(RND * 5)
-    randomize
-
     Init()
     paper BLACK: ink WHITE: border BLACK: cls
-    POKE UINTEGER 23675, @Items
 
-    PrintAt(0,0, "Adventure Game.")
-    HRPrint(ch_posX, ch_posY, @Character, attr , 0)   
+    energy = 100
+    gold = 0
+    ch_posX = 16*8
+    ch_posY = 12*8
 
     hasKey = FALSE
 
-    DIM oldX as ubyte
-    DIM oldY as ubyte
+    DIM oldX as ubyte = ch_posX
+    DIM oldY as ubyte = ch_posY
+    DIM cellX as ubyte = (ch_posX + 4) / 8
+    DIM cellY as ubyte = (ch_posY + 4) / 8
+    DIM oldCellX as ubyte = cellX
+    DIM oldCellY as ubyte = cellY
 
+    for i = 0 to 2
+        for j = 0 to 2
+            OpenCell(cellX + i - 1, cellY + j - 1)
+            DrawItem(cellX + i - 1, cellY + j - 1)
+        next j
+    next i
+
+    HRPrint(ch_posX, ch_posY, @Character, attr , 0)   
+    DrawUI()
 
     DO
-        oldX = ch_posX
-        oldY = ch_posY
 
         key = INKEY$
         if key = " " THEN GOTO END_PROGRAMM
@@ -202,47 +300,74 @@ PROGRAM:
 
         if oldX = ch_posX AND oldY = ch_posY THEN CONTINUE DO
 
-        DIM cellX as ubyte = (ch_posX + 4) / 8
-        DIM cellY as ubyte = (ch_posY + 4) / 8
 
+        HRPrint(oldX, oldY, 32, attrBlank ,  0)
+        HRPrint(ch_posX, ch_posY, @Character, attr ,  0)
+
+        cellX = (ch_posX + 4) / 8
+        cellY = (ch_posY + 4) / 8
+
+        if cellX <> oldCellX OR cellY <> oldCellY THEN 
+            PrintAt(SCREEN_HEIGHT - 1 , 0, LINE_EMPTY)
+            moveCount = moveCount + 1
+            if moveCount MOD 5 = 0 THEN energy = energy - 1
+        end if
+
+
+        OpenCell(cellX, cellY)
         'open adjacent cells X
         if moveX <> 0 THEN
-            OpenCell(cellX, cellY)
             OpenCell(cellX, cellY + 1)
             OpenCell(cellX, cellY - 1)
         END IF
 
         'open adjacent cells Y
         if moveY <> 0 THEN
-            OpenCell(cellX, cellY)
             OpenCell(cellX + 1, cellY)
             OpenCell(cellX - 1, cellY)
         END IF
 
-        HRPrint(oldX, oldY, 32, attrBlank ,  0)
-        HRPrint(ch_posX, ch_posY, @Character, attr ,  0)   
+        ExecuteCell(cellX, cellY)           
 
-        ExecuteCell(cellX, cellY)
+        if energy <= 0 then goto LOSE_SCREEN
 
-        DrawItem(cellX, cellY)
-        DrawItem(cellX+1, cellY)
-        DrawItem(cellX-1, cellY)
-        DrawItem(cellX, cellY+1)
-        DrawItem(cellX, cellY-1)
+        for i = 0 to 2
+            for j = 0 to 2
+                DrawItem(cellX + i - 1, cellY + j - 1)
+            next j
+        next i
 
         oldX = ch_posX
         oldY = ch_posY
 
-        PrintAt(0,21, "Cell: " + str(cellX) + ":" + str(cellY) + "   ")
-        'PrintAt(SCREEN_HEIGHT - 1 , 0, str(oldX) + ":" + str(oldY) + " -> " + str(ch_posX) + ":" + str(ch_posY) + "   ")
+        oldCellX = cellX
+        oldCellY = cellY
 
-        'DrawField()
-        'PRINT AT 15, 10; INK BLACK; PAPER WHITE; CHR(144+1)
+        DrawUI()
+
     LOOP UNTIL FALSE
 
+SUB LoadTitleScreen()
+asm
+    ld hl,.LABEL._title_screen_data
+    LD DE, 16384             
+    LD BC, 6912              
+    LDIR
+end asm
+END SUB
+
+
+title_screen_data: 
 ASM
-    title_screen_data:
-    INCBIN "zxTitleScr.scr"
+    INCBIN "zxTitleScr.scr.zx0"
+END ASM
+lose_screen_data: 
+ASM
+    INCBIN "zxLose.scr.zx0"
+END ASM
+victory_screen_data:
+ASM
+    INCBIN "zxVictory.scr.zx0"
 END ASM
 
 Character:
@@ -252,9 +377,35 @@ Character:
     END ASM
 Items:
     ASM
-        DB 24,60,110,74,90,90,74,126    ;Door
-        DB 16,112,80,248,12,6,28,8      ;Key
+        DB 24,60,110,74,90,90,74,126    ;0 Door
+        DB 16,112,80,248,12,6,28,8      ;1 Key
+        DB 160,68,34,86,8,149,98,4      ;2 Spiderweb
+        DB 0,0,60,90,102,90,66,126      ;3 Chest closed
+        DB 0,60,90,66,126,66,66,126     ;4 Chest opened
     END ASM
+
+LOSE_SCREEN:
+    dzx0Standard(@lose_screen_data, 16384)
+    PAUSE 60
+    ClearEnter() 
+    PrintAt(20, 17, "1. RESTART",ALIGN_LEFT, BLACK, PINK)
+    PrintAt(21, 17, "2. EXIT",ALIGN_LEFT, BLACK, PINK)
+    DO
+        key = INKEY$
+        if key = "2" THEN GOTO END_PROGRAMM
+    LOOP UNTIL key = "1"
+    GOTO PROGRAM
+
+VICTORY_SCREEN:
+    dzx0Standard(@victory_screen_data, 16384)
+    PAUSE 60
+    ClearEnter()
+    PrintAt(20, 17, "1. RESTART",ALIGN_LEFT, BLACK, PINK)
+    PrintAt(21, 17, "2. EXIT",ALIGN_LEFT, BLACK,PINK)
+    DO
+        key = INKEY$
+        if key = "2" THEN GOTO END_PROGRAMM
+    LOOP UNTIL key = "1"
 
 END_PROGRAMM:       
     paper WHITE: ink BLACK: border WHITE: cls
